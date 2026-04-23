@@ -53,7 +53,7 @@ export default function LeadTable({ accent, density, selectedId, onSelect, emplo
 
       {/* Column headers */}
       <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 0, padding: '6px 16px', borderBottom: `1px solid ${C.border}` }}>
-        {['', 'Employer', 'Score', 'Signals', 'Broker', 'Status'].map(h => (
+        {['', 'Employer', 'Score', 'Signals', 'Assigned to', 'Status'].map(h => (
           <div key={h} style={{ fontSize: 10, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>{h}</div>
         ))}
       </div>
