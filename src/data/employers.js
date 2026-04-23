@@ -118,6 +118,33 @@ export const BROKERS = [
   { name: 'Dana P.',  initials: 'DP', color: '#F87171', region: 'Northwest' },
 ];
 
+const STATE_REGION = {
+  // Midwest → Sarah R.
+  OH:'Midwest', IN:'Midwest', IL:'Midwest', MI:'Midwest', WI:'Midwest',
+  MN:'Midwest', IA:'Midwest', MO:'Midwest', ND:'Midwest', SD:'Midwest',
+  NE:'Midwest', KS:'Midwest',
+  // Southwest → Mike T.
+  AZ:'Southwest', TX:'Southwest', NM:'Southwest', OK:'Southwest',
+  NV:'Southwest', UT:'Southwest', CO:'Southwest',
+  // Southeast → Jamie L.
+  GA:'Southeast', FL:'Southeast', NC:'Southeast', SC:'Southeast',
+  VA:'Southeast', WV:'Southeast', TN:'Southeast', AL:'Southeast',
+  MS:'Southeast', LA:'Southeast', AR:'Southeast', KY:'Southeast',
+  // Northeast → Chris M.
+  NY:'Northeast', PA:'Northeast', NJ:'Northeast', CT:'Northeast',
+  RI:'Northeast', MA:'Northeast', VT:'Northeast', NH:'Northeast',
+  ME:'Northeast', MD:'Northeast', DE:'Northeast', DC:'Northeast',
+  // Northwest → Dana P.
+  WA:'Northwest', OR:'Northwest', ID:'Northwest', MT:'Northwest',
+  WY:'Northwest', AK:'Northwest', HI:'Northwest', CA:'Northwest',
+};
+
+export function getBrokerByLocation(location) {
+  const state = location.split(', ')[1]?.trim();
+  const region = STATE_REGION[state];
+  return BROKERS.find(b => b.region === region) ?? null;
+}
+
 export const employers = [
   {
     id: 1,

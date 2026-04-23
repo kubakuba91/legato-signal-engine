@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { C } from './constants/colors.js';
-import { employers as initialEmployers, INCOMING_POOL } from './data/employers.js';
+import { employers as initialEmployers, INCOMING_POOL, getBrokerByLocation } from './data/employers.js';
 import Sidebar, { navItems } from './components/Sidebar.jsx';
 import TopBar from './components/TopBar.jsx';
 import StatCards from './components/StatCards.jsx';
@@ -18,7 +18,13 @@ export default function App() {
   const [accent, setAccent] = useState(DEFAULT_ACCENT);
   const [density, setDensity] = useState(DEFAULT_DENSITY);
   const [panelPos, setPanelPos] = useState(DEFAULT_PANEL_POS);
-  const [employerData, setEmployerData] = useState(initialEmployers);
+  const [employerData, setEmployerData] = useState(() =>
+    initialEmployers.map(e => {
+      if (e.broker) return e;
+      const broker = getBrokerByLocation(e.location);
+      return broker ? { ...e, broker, status: 'routed' } : e;
+    })
+  );
   const [newIds, setNewIds] = useState(new Set());
   const poolIndexRef = useRef(0);
   const nextIdRef = useRef(initialEmployers.length + 1);
@@ -30,7 +36,13 @@ export default function App() {
       const pool = INCOMING_POOL;
       if (poolIndexRef.current >= pool.length) return;
       const template = pool[poolIndexRef.current++];
-      const newEmp = { ...template, id: nextIdRef.current++ };
+      const broker = getBrokerByLocation(template.location);
+      const newEmp = {
+        ...template,
+        id: nextIdRef.current++,
+        broker: broker ?? null,
+        status: broker ? 'routed' : 'new',
+      };
       setEmployerData(prev => [newEmp, ...prev]);
       setNewIds(prev => new Set([...prev, newEmp.id]));
       setTimeout(() => setNewIds(prev => { const s = new Set(prev); s.delete(newEmp.id); return s; }), 3000);
