@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { C } from './constants/colors.js';
-import { employers as initialEmployers } from './data/employers.js';
+import { employers as initialEmployers, INCOMING_POOL } from './data/employers.js';
 import Sidebar, { navItems } from './components/Sidebar.jsx';
 import TopBar from './components/TopBar.jsx';
 import StatCards from './components/StatCards.jsx';
@@ -19,6 +19,43 @@ export default function App() {
   const [density, setDensity] = useState(DEFAULT_DENSITY);
   const [panelPos, setPanelPos] = useState(DEFAULT_PANEL_POS);
   const [employerData, setEmployerData] = useState(initialEmployers);
+  const [newIds, setNewIds] = useState(new Set());
+  const poolIndexRef = useRef(0);
+  const nextIdRef = useRef(initialEmployers.length + 1);
+  const intervalRef = useRef(null);
+
+  const startFeed = () => {
+    if (intervalRef.current) return;
+    intervalRef.current = setInterval(() => {
+      const pool = INCOMING_POOL;
+      if (poolIndexRef.current >= pool.length) return;
+      const template = pool[poolIndexRef.current++];
+      const newEmp = { ...template, id: nextIdRef.current++ };
+      setEmployerData(prev => [newEmp, ...prev]);
+      setNewIds(prev => new Set([...prev, newEmp.id]));
+      setTimeout(() => setNewIds(prev => { const s = new Set(prev); s.delete(newEmp.id); return s; }), 3000);
+    }, 7000);
+  };
+
+  const stopFeed = () => {
+    clearInterval(intervalRef.current);
+    intervalRef.current = null;
+  };
+
+  useEffect(() => {
+    startFeed();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') stopFeed();
+      else startFeed();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      stopFeed();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
 
   const selectedEmployer = employerData.find(e => e.id === selectedId) ?? null;
 
@@ -54,6 +91,7 @@ export default function App() {
               onSelect={setSelectedId}
               employers={employerData}
               panelOpen={!!selectedEmployer}
+              newIds={newIds}
             />
             {selectedEmployer && panelPos === 'right' && (
               <div style={{

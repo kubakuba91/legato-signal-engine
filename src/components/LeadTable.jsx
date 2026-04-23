@@ -8,7 +8,7 @@ import PriorityDot from './ui/PriorityDot.jsx';
 
 const FILTERS = ['All', 'High priority', 'New signals', 'Unrouted', 'Routed'];
 
-export default function LeadTable({ accent, density, selectedId, onSelect, employers, panelOpen }) {
+export default function LeadTable({ accent, density, selectedId, onSelect, employers, panelOpen, newIds = new Set() }) {
   const [filter, setFilter] = useState('All');
   const rowPad = density === 'compact' ? '8px 12px' : '13px 16px';
   const cols = panelOpen
@@ -62,6 +62,7 @@ export default function LeadTable({ accent, density, selectedId, onSelect, emplo
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {filtered.map(emp => {
           const isSelected = selectedId === emp.id;
+          const isNew = newIds.has(emp.id);
           return (
             <div
               key={emp.id}
@@ -70,18 +71,25 @@ export default function LeadTable({ accent, density, selectedId, onSelect, emplo
                 display: 'grid', gridTemplateColumns: cols,
                 padding: rowPad, borderBottom: `1px solid ${C.border}`,
                 cursor: 'pointer', alignItems: 'center',
-                background: isSelected ? accent + '08' : 'transparent',
-                borderLeft: `2px solid ${isSelected ? accent : 'transparent'}`,
-                transition: 'background 0.12s',
+                background: isNew ? accent + '14' : isSelected ? accent + '08' : 'transparent',
+                borderLeft: `2px solid ${isSelected ? accent : isNew ? accent : 'transparent'}`,
+                transition: 'background 1.5s, border-color 1.5s',
               }}
-              onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = C.bg2; }}
-              onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={e => { if (!isSelected && !isNew) e.currentTarget.style.background = C.bg2; }}
+              onMouseLeave={e => { if (!isSelected && !isNew) e.currentTarget.style.background = 'transparent'; }}
             >
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <PriorityDot score={emp.score} />
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{emp.name}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{emp.name}</span>
+                  {isNew && (
+                    <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: accent + '25', color: accent, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'DM Mono' }}>
+                      New
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{emp.location} · {emp.fte} FTE · {emp.industry}</div>
               </div>
               <div>
