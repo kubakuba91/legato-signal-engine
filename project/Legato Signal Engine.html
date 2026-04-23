@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Legato Signal Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { width: 100%; height: 100%; overflow: hidden; }
+  body { font-family: 'DM Sans', sans-serif; background: #0B1929; color: #C8D8E8; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1E3448; border-radius: 2px; }
+
+  /* Tweaks panel */
+  #tweaks-panel {
+    position: fixed; bottom: 20px; right: 20px; width: 260px;
+    background: #0F2035; border: 1px solid #1E3448;
+    border-radius: 8px; padding: 16px; z-index: 9999;
+    display: none; flex-direction: column; gap: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  #tweaks-panel.visible { display: flex; }
+  #tweaks-panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #5A7A9A; font-weight: 600; }
+  .tweak-row { display: flex; flex-direction: column; gap: 6px; }
+  .tweak-label { font-size: 12px; color: #8AA8C8; }
+  .tweak-select, .tweak-range { width: 100%; background: #0B1929; border: 1px solid #1E3448; color: #C8D8E8; border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 12px; padding: 5px 8px; }
+  .tweak-range { padding: 0; cursor: pointer; accent-color: #00C9A7; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="tweaks-panel">
+  <h3>Tweaks</h3>
+  <div class="tweak-row">
+    <label class="tweak-label">Accent color</label>
+    <select class="tweak-select" id="tweak-accent">
+      <option value="#00C9A7">Teal (default)</option>
+      <option value="#4F9EF0">Blue</option>
+      <option value="#A78BFA">Violet</option>
+      <option value="#F59E0B">Amber</option>
+    </select>
+  </div>
+  <div class="tweak-row">
+    <label class="tweak-label">Data density</label>
+    <select class="tweak-select" id="tweak-density">
+      <option value="comfortable">Comfortable</option>
+      <option value="compact">Compact</option>
+    </select>
+  </div>
+  <div class="tweak-row">
+    <label class="tweak-label">Panel position</label>
+    <select class="tweak-select" id="tweak-panel">
+      <option value="bottom">Below table</option>
+      <option value="right">Right sidebar</option>
+    </select>
+  </div>
+</div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "#00C9A7",
+  "density": "comfortable",
+  "panelPos": "right"
+}/*EDITMODE-END*/;
+
+// ── Color tokens ──────────────────────────────────────────────
+const C = {
+  bg:     '#0B1929',
+  bg1:    '#0F2035',
+  bg2:    '#132840',
+  bg3:    '#1A3352',
+  border: '#1E3448',
+  border2:'#243E58',
+  text:   '#C8D8E8',
+  text2:  '#8AA8C8',
+  text3:  '#5A7A9A',
+  teal:   '#00C9A7',
+  amber:  '#F59E0B',
+  blue:   '#4F9EF0',
+  red:    '#F87171',
+};
+
+// ── Data ──────────────────────────────────────────────────────
+const employers = [
+  {
+    id: 1,
+    name: 'Meridian Logistics Group',
+    location: 'Columbus, OH',
+    fte: 82,
+    industry: 'Logistics',
+    score: 94,
+    signals: ['Workforce', 'Financial', 'Intent'],
+    broker: { name: 'Sarah R.', initials: 'SR', color: '#00C9A7' },
+    status: 'routed',
+    planYearEnd: 'Dec 31',
+    costPerEmployee: '$847/mo',
+    carrier: 'Anthem',
+    headcount: '+18% YoY',
+    sources: [
+      { name: 'Form 5500', icon: '📄', found: 'Benefits renewal window opening — 90-day trigger active' },
+      { name: 'Lightcast', icon: '📊', found: '14 open roles in logistics ops; workforce expansion signal' },
+      { name: 'Bombora', icon: '🔍', found: 'Surge topic: "employee benefits alternatives" — 8.2× baseline' },
+      { name: 'BLS QCEW', icon: '🏛', found: 'Q3 payroll up 11.4% YoY in metro — strong growth marker' },
+    ],
+  },
+  {
+    id: 2,
+    name: 'Sunridge Home Health',
+    location: 'Phoenix, AZ',
+    fte: 134,
+    industry: 'Healthcare',
+    score: 91,
+    signals: ['Labor', 'Regulatory', 'Workforce'],
+    broker: { name: 'Mike T.', initials: 'MT', color: '#4F9EF0' },
+    status: 'routed',
+    planYearEnd: 'Mar 31',
+    costPerEmployee: '$1,102/mo',
+    carrier: 'UnitedHealth',
+    headcount: '+22% YoY',
+    sources: [
+      { name: 'Form 5500', icon: '📄', found: 'Large plan filer — ACA reporting complexity increasing' },
+      { name: 'Lightcast', icon: '📊', found: 'RN and CNA hiring up 34%; retention cost pressure rising' },
+      { name: 'BLS QCEW', icon: '🏛', found: 'Healthcare wage growth +9.1% in Phoenix metro corridor' },
+    ],
+  },
+  {
+    id: 3,
+    name: 'Crestwood Fabrication',
+    location: 'Indianapolis, IN',
+    fte: 61,
+    industry: 'Manufacturing',
+    score: 87,
+    signals: ['Financial', 'Intent'],
+    broker: null,
+    status: 'new',
+    planYearEnd: 'Jun 30',
+    costPerEmployee: '$724/mo',
+    carrier: 'BCBS Indiana',
+    headcount: '+6% YoY',
+    sources: [
+      { name: 'Bombora', icon: '🔍', found: 'Intent spike: "self-funded health insurance" — 6.4× baseline' },
+      { name: 'Form 5500', icon: '📄', found: 'Benefits cost up 19% YoY — approaching ICHRA break-even' },
+    ],
+  },
+  {
+    id: 4,
+    name: 'Apex Staffing Solutions',
+    location: 'Atlanta, GA',
+    fte: 203,
+    industry: 'Staffing',
+    score: 83,
+    signals: ['Labor', 'Workforce'],
+    broker: null,
+    status: 'new',
+    planYearEnd: 'Sep 30',
+    costPerEmployee: '$934/mo',
+    carrier: 'Cigna',
+    headcount: '+31% YoY',
+    sources: [
+      { name: 'Lightcast', icon: '📊', found: 'Rapid headcount growth — benefit admin complexity rising' },
+      { name: 'BLS QCEW', icon: '🏛', found: 'Staffing sector wage pressure up 12.3% in Atlanta MSA' },
+    ],
+  },
+  {
+    id: 5,
+    name: 'Blue Ridge Hospitality',
+    location: 'Asheville, NC',
+    fte: 47,
+    industry: 'Hospitality',
+    score: 76,
+    signals: ['Regulatory', 'Financial'],
+    broker: { name: 'Jamie L.', initials: 'JL', color: '#A78BFA' },
+    status: 'pending',
+    planYearEnd: 'Jan 31',
+    costPerEmployee: '$618/mo',
+    carrier: 'Aetna',
+    headcount: '+4% YoY',
+    sources: [
+      { name: 'Form 5500', icon: '📄', found: 'ACA employer mandate threshold approaching — 50 FTE watch' },
+      { name: 'Bombora', icon: '🔍', found: 'Intent signal: "ACA compliance small business" — moderate surge' },
+    ],
+  },
+];
+
+const signalColors = {
+  'Labor':      { bg: 'rgba(79,158,240,0.12)',  text: '#4F9EF0' },
+  'Financial':  { bg: 'rgba(0,201,167,0.12)',   text: '#00C9A7' },
+  'Workforce':  { bg: 'rgba(167,139,250,0.12)', text: '#A78BFA' },
+  'Intent':     { bg: 'rgba(245,158,11,0.12)',  text: '#F59E0B' },
+  'Regulatory': { bg: 'rgba(248,113,113,0.12)', text: '#F87171' },
+};
+
+// ── Sub-components ────────────────────────────────────────────
+function ScoreRing({ score, accent }) {
+  const r = 24, cx = 30, cy = 30, stroke = 4;
+  const circ = 2 * Math.PI * r;
+  const dash = (score / 100) * circ;
+  return (
+    <svg width="60" height="60" viewBox="0 0 60 60">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={C.bg3} strokeWidth={stroke} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={accent} strokeWidth={stroke}
+        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+        transform={`rotate(-90 ${cx} ${cy})`} />
+      <text x={cx} y={cy+1} textAnchor="middle" dominantBaseline="middle"
+        fill={accent} fontSize="13" fontWeight="600" fontFamily="DM Mono, monospace">{score}</text>
+    </svg>
+  );
+}
+
+function ScoreBar({ score, accent, employer }) {
+  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+
+  const handleMouseEnter = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setPos({ x: r.left, y: r.top });
+    setShow(true);
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setShow(false)}
+    >
+      <span style={{ fontFamily: 'DM Mono', fontSize: 13, fontWeight: 500, color: score >= 90 ? accent : score >= 80 ? C.text : C.text2, minWidth: 24 }}>{score}</span>
+      <div style={{ width: 52, height: 3, background: C.bg3, borderRadius: 2, overflow: 'hidden', cursor: 'default' }}>
+        <div style={{ width: `${score}%`, height: '100%', background: score >= 90 ? accent : score >= 80 ? C.blue : C.text3, borderRadius: 2 }} />
+      </div>
+      {show && employer && ReactDOM.createPortal(
+        <div style={{
+          position: 'fixed', left: pos.x, top: pos.y - 8, transform: 'translateY(-100%)',
+          zIndex: 9999, background: C.bg2, border: `1px solid ${C.border2}`,
+          borderRadius: 7, padding: '10px 12px', width: 200,
+          boxShadow: '0 6px 20px rgba(0,0,0,0.6)', pointerEvents: 'none',
+        }}>
+          <div style={{ fontSize: 10, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Score breakdown</div>
+          {[
+            { label: 'Intent signals',  val: Math.round(score * 0.35), max: 35 },
+            { label: 'Financial fit',   val: Math.round(score * 0.28), max: 28 },
+            { label: 'Workforce match', val: Math.round(score * 0.22), max: 22 },
+            { label: 'Regulatory risk', val: Math.round(score * 0.15), max: 15 },
+          ].map(row => (
+            <div key={row.label} style={{ marginBottom: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ fontSize: 10, color: C.text2 }}>{row.label}</span>
+                <span style={{ fontSize: 10, fontFamily: 'DM Mono', color: C.text }}>{row.val}<span style={{ color: C.text3 }}>/{row.max}</span></span>
+              </div>
+              <div style={{ height: 2, background: C.bg3, borderRadius: 1 }}>
+                <div style={{ width: `${(row.val / row.max) * 100}%`, height: '100%', background: accent, borderRadius: 1 }} />
+              </div>
+            </div>
+          ))}
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 10, color: C.text3 }}>Composite</span>
+            <span style={{ fontSize: 11, fontFamily: 'DM Mono', fontWeight: 600, color: accent }}>{score}</span>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+function SignalTag({ label }) {
+  const col = signalColors[label] || { bg: C.bg3, text: C.text2 };
+  return (
+    <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 6px', borderRadius: 3, background: col.bg, color: col.text, letterSpacing: '0.02em' }}>{label}</span>
+  );
+}
+
+function StatusBadge({ status, accent }) {
+  const map = {
+    routed:  { bg: 'rgba(0,201,167,0.1)',  text: accent,  label: 'Routed' },
+    new:     { bg: 'rgba(79,158,240,0.1)', text: C.blue,  label: 'New' },
+    pending: { bg: 'rgba(245,158,11,0.1)', text: C.amber, label: 'Pending' },
+  };
+  const s = map[status];
+  return (
+    <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 3, background: s.bg, color: s.text, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{s.label}</span>
+  );
+}
+
+function BrokerPill({ broker }) {
+  if (!broker) return <span style={{ color: C.text3, fontSize: 12 }}>Unassigned</span>;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ width: 22, height: 22, borderRadius: '50%', background: broker.color + '22', border: `1px solid ${broker.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: broker.color, fontFamily: 'DM Mono' }}>
+        {broker.initials}
+      </div>
+      <span style={{ fontSize: 12, color: C.text2 }}>{broker.name}</span>
+    </div>
+  );
+}
+
+function PriorityDot({ score }) {
+  const color = score >= 90 ? C.teal : score >= 80 ? C.blue : C.amber;
+  return <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />;
+}
+
+// ── Detail Panel ──────────────────────────────────────────────
+function DetailPanel({ employer, accent, onClose, onAssign }) {
+  const [showPicker, setShowPicker] = useState(false);
+  const cards = [
+    { label: 'Plan year end', value: employer.planYearEnd },
+    { label: 'Cost / employee', value: employer.costPerEmployee },
+    { label: 'Current carrier', value: employer.carrier },
+    { label: 'Headcount trend', value: employer.headcount },
+  ];
+  return (
+    <div style={{ background: C.bg1, borderTop: `1px solid ${C.border}`, padding: '20px 24px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
+        {/* Detail cards */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{employer.name}</div>
+                <div style={{ fontSize: 12, color: C.text3, marginTop: 3 }}>{employer.location} · {employer.fte} FTE · {employer.industry}</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: C.bg2, border: `1px solid ${accent}44`, borderRadius: 6, padding: '6px 14px', flexShrink: 0 }}>
+                <div style={{ fontSize: 22, fontFamily: 'DM Mono', fontWeight: 600, color: accent, lineHeight: 1 }}>{employer.score}</div>
+                <div style={{ fontSize: 9, color: C.text3, marginTop: 3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>score</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <div style={{ position: 'relative' }}>
+                {!employer.broker ? (
+                  <button onClick={() => setShowPicker(p => !p)} style={{
+                    fontSize: 11, fontWeight: 500, padding: '5px 10px', borderRadius: 5, cursor: 'pointer',
+                    fontFamily: 'DM Sans', background: C.amber + '18', color: C.amber,
+                    border: `1px solid ${C.amber}44`, display: 'flex', alignItems: 'center', gap: 5,
+                  }}>
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="4" r="2.2" stroke="currentColor" strokeWidth="1.3"/><path d="M1 11c0-2.21 1.79-4 4-4s4 1.79 4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><line x1="9.5" y1="7" x2="9.5" y2="11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><line x1="7.5" y1="9" x2="11.5" y2="9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                    Assign broker
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+                    <div style={{ fontSize: 9, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Assigned to</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 22, height: 22, borderRadius: '50%', background: employer.broker.color + '22', border: `1px solid ${employer.broker.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: employer.broker.color, fontFamily: 'DM Mono' }}>{employer.broker.initials}</div>
+                      <span style={{ fontSize: 11, color: C.text2 }}>{employer.broker.name}</span>
+                      <button onClick={() => setShowPicker(p => !p)} style={{ fontSize: 10, color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Sans' }}>Change</button>
+                    </div>
+                  </div>
+                )}
+                {showPicker && (
+                  <BrokerPicker accent={accent}
+                    onAssign={b => { onAssign(b); setShowPicker(false); }}
+                    onCancel={() => setShowPicker(false)} />
+                )}
+              </div>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.text3, cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '2px 6px' }}>×</button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 18 }}>
+            {cards.map(c => (
+              <div key={c.label} style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 7, padding: '14px 16px' }}>
+                <div style={{ fontSize: 10, color: C.text3, marginBottom: 8, letterSpacing: '0.04em' }}>{c.label}</div>
+                <div style={{ fontSize: 16, fontFamily: 'DM Mono', fontWeight: 500, color: C.text }}>{c.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Signal sources */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Signal breakdown</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {employer.sources.map(s => (
+                <div key={s.name} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 5 }}>
+                  <span style={{ fontSize: 13, flexShrink: 0, marginTop: 1 }}>{s.icon}</span>
+                  <div>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: accent, fontFamily: 'DM Mono' }}>{s.name}</span>
+                    <span style={{ fontSize: 11, color: C.text2, marginLeft: 8 }}>{s.found}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {['Draft outreach', 'Find similar', 'Apollo contacts'].map((label, i) => (
+              <button key={label} style={{
+                fontSize: 12, fontWeight: 500, padding: '7px 14px', borderRadius: 5, cursor: 'pointer',
+                fontFamily: 'DM Sans',
+                background: i === 0 ? accent : 'transparent',
+                color: i === 0 ? '#0B1929' : C.text2,
+                border: i === 0 ? 'none' : `1px solid ${C.border2}`,
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => e.target.style.opacity = '0.8'}
+              onMouseLeave={e => e.target.style.opacity = '1'}
+              >{label}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Sidebar ───────────────────────────────────────────────────
+const navItems = [
+  { id: 'feed',     label: 'Lead Feed',      icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="2" rx="1" fill="currentColor"/><rect x="1" y="6" width="10" height="2" rx="1" fill="currentColor"/><rect x="1" y="10" width="12" height="2" rx="1" fill="currentColor"/><rect x="1" y="14" width="8" height="2" rx="1" fill="currentColor"/></svg> },
+  { id: 'map',      label: 'Map View',       icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 1L1 3v11l5-2 4 2 5-2V1l-5 2-4-2z" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round"/><line x1="6" y1="1" x2="6" y2="12" stroke="currentColor" strokeWidth="1.3"/><line x1="10" y1="3" x2="10" y2="14" stroke="currentColor" strokeWidth="1.3"/></svg> },
+  { id: 'sources',  label: 'Signal Sources', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M4.5 11.5A4.97 4.97 0 013 8a5 5 0 015-5 5 5 0 015 5 4.97 4.97 0 01-1.5 3.5" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round"/><path d="M2 14A7.96 7.96 0 011 8a7 7 0 017-7 7 7 0 017 7 7.96 7.96 0 01-1 6" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round"/></svg> },
+  { id: 'analytics',label: 'Analytics',      icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="9" width="3" height="6" rx="1" fill="currentColor"/><rect x="6" y="5" width="3" height="10" rx="1" fill="currentColor"/><rect x="11" y="1" width="3" height="14" rx="1" fill="currentColor"/></svg> },
+  { id: 'brokers',  label: 'Brokers',        icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.4"/><path d="M1 14c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><circle cx="12" cy="5" r="2" stroke="currentColor" strokeWidth="1.4"/><path d="M12 9c1.86 0 3 1.34 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg> },
+  { id: 'campaigns',label: 'Campaigns',      icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 10V6l6-4 6 4v4l-6 4-6-4z" stroke="currentColor" strokeWidth="1.4" fill="none"/><path d="M8 2v12M2 6l6 4 6-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg> },
+  { id: 'reports',  label: 'Reports',        icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="10" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.4" fill="none"/><line x1="5" y1="5" x2="9" y2="5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><line x1="5" y1="8" x2="9" y2="8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><line x1="5" y1="11" x2="7" y2="11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><polygon points="11,10 15,10 13,14" fill="currentColor"/></svg> },
+];
+
+function Sidebar({ active, onNav, accent }) {
+  return (
+    <div style={{ width: 196, background: C.bg1, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, padding: '0 0 16px' }}>
+      <div style={{ padding: '18px 16px 16px', borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 28, height: 28, background: accent + '18', border: `1px solid ${accent}44`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: accent }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Legato</div>
+            <div style={{ fontSize: 9, color: C.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Signal Engine</div>
+          </div>
+        </div>
+      </div>
+
+      <nav style={{ flex: 1, padding: '10px 8px' }}>
+        {navItems.map(item => {
+          const isActive = item.id === active;
+          return (
+            <button key={item.id} onClick={() => onNav(item.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                padding: '8px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                background: isActive ? accent + '15' : 'transparent',
+                color: isActive ? accent : C.text3,
+                fontSize: 13, fontWeight: isActive ? 500 : 400,
+                fontFamily: 'DM Sans', marginBottom: 2,
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = C.bg3; e.currentTarget.style.color = C.text2; }}}
+              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.text3; }}}
+            >
+              <span style={{ opacity: isActive ? 1 : 0.7 }}>{item.icon}</span>
+              {item.label}
+              {isActive && <div style={{ marginLeft: 'auto', width: 3, height: 3, borderRadius: '50%', background: accent }} />}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Apollo sync card */}
+      <div style={{ margin: '0 8px', padding: '10px 12px', background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: accent }} />
+          <span style={{ fontSize: 10, fontWeight: 600, color: C.text2, letterSpacing: '0.04em' }}>Apollo sync</span>
+        </div>
+        <div style={{ fontFamily: 'DM Mono', fontSize: 18, fontWeight: 500, color: C.text }}>1,847</div>
+        <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>contacts enriched this week</div>
+        <div style={{ marginTop: 8, height: 2, background: C.bg3, borderRadius: 1 }}>
+          <div style={{ width: '62%', height: '100%', background: accent + '88', borderRadius: 1 }} />
+        </div>
+        <div style={{ fontSize: 9, color: C.text3, marginTop: 4 }}>Last sync: 4 min ago</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Top Bar ───────────────────────────────────────────────────
+function TopBar({ accent, navLabel }) {
+  const [pulse, setPulse] = useState(true);
+  useEffect(() => { const t = setInterval(() => setPulse(p => !p), 1400); return () => clearInterval(t); }, []);
+  return (
+    <div style={{ height: 52, background: C.bg1, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 16, flexShrink: 0 }}>
+      <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: C.text }}>{navLabel}</div>
+      {/* Live indicator */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ position: 'relative', width: 8, height: 8 }}>
+          <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: accent, opacity: pulse ? 0.3 : 0, transition: 'opacity 0.7s', transform: 'scale(2)' }} />
+          <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: accent }} />
+        </div>
+        <span style={{ fontSize: 11, color: C.text2, fontFamily: 'DM Mono' }}>Live signals</span>
+      </div>
+      <div style={{ width: 1, height: 20, background: C.border }} />
+      <div style={{ fontSize: 11, color: C.text3, fontFamily: 'DM Mono' }}>Apr 23, 2026</div>
+      {/* Avatar */}
+      <div style={{ width: 30, height: 30, borderRadius: '50%', background: C.bg3, border: `1px solid ${C.border2}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, color: C.text2, cursor: 'pointer' }}>JD</div>
+    </div>
+  );
+}
+
+// ── Stat Cards ────────────────────────────────────────────────
+function StatCards({ accent }) {
+  const cards = [
+    { label: 'Active signals', value: '1,284', sub: '+38 today', color: accent },
+    { label: 'Scored employers', value: '342', sub: '87 high priority', color: C.text },
+    { label: 'Routed this week', value: '24', sub: '8 brokers notified', color: C.amber },
+    { label: 'Outreach opened', value: '68%', sub: 'vs 12% industry avg', color: C.blue },
+  ];
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, padding: '14px 18px', flexShrink: 0 }}>
+      {cards.map(c => (
+        <div key={c.label} style={{ background: C.bg1, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 14px' }}>
+          <div style={{ fontSize: 10, color: C.text3, marginBottom: 6, letterSpacing: '0.04em' }}>{c.label}</div>
+          <div style={{ fontFamily: 'DM Mono', fontSize: 24, fontWeight: 500, color: c.color, lineHeight: 1 }}>{c.value}</div>
+          <div style={{ fontSize: 10, color: C.text3, marginTop: 5 }}>{c.sub}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Main table ────────────────────────────────────────────────
+const FILTERS = ['All', 'High priority', 'New signals', 'Unrouted', 'Routed'];
+
+function LeadTable({ accent, density, selectedId, onSelect, employers, panelOpen }) {
+  const [filter, setFilter] = useState('All');
+  const rowPad = density === 'compact' ? '8px 12px' : '13px 16px';
+  const cols = panelOpen
+    ? '28px 1fr 90px 200px 140px 80px'
+    : '28px 1.6fr 90px 1fr 180px 100px';
+
+  const filtered = employers.filter(e => {
+    if (filter === 'All') return true;
+    if (filter === 'High priority') return e.score >= 85;
+    if (filter === 'New signals') return e.status === 'new';
+    if (filter === 'Unrouted') return !e.broker;
+    if (filter === 'Routed') return !!e.broker;
+    return true;
+  });
+
+  return (
+    <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', margin: '0 18px', background: C.bg1, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+      {/* Filter chips */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 14px', borderBottom: `1px solid ${C.border}` }}>
+        {FILTERS.map(f => (
+          <button key={f} onClick={() => setFilter(f)} style={{
+            fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 5, cursor: 'pointer', border: 'none',
+            background: filter === f ? accent + '18' : 'transparent',
+            color: filter === f ? accent : C.text3,
+            fontFamily: 'DM Sans',
+            transition: 'all 0.12s',
+          }}>{f}</button>
+        ))}
+        <div style={{ marginLeft: 'auto', fontSize: 10, color: C.text3, fontFamily: 'DM Mono' }}>{filtered.length} employers</div>
+      </div>
+
+      {/* Column headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 0, padding: '6px 16px', borderBottom: `1px solid ${C.border}` }}>
+        {['', 'Employer', 'Score', 'Signals', 'Broker', 'Status'].map(h => (
+          <div key={h} style={{ fontSize: 10, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>{h}</div>
+        ))}
+      </div>
+
+      {/* Rows */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {filtered.map(emp => {
+          const isSelected = selectedId === emp.id;
+          return (
+            <div key={emp.id} onClick={() => onSelect(isSelected ? null : emp.id)}
+              style={{
+                display: 'grid', gridTemplateColumns: cols,
+                padding: rowPad, borderBottom: `1px solid ${C.border}`,
+                cursor: 'pointer', alignItems: 'center',
+                background: isSelected ? accent + '08' : 'transparent',
+                borderLeft: `2px solid ${isSelected ? accent : 'transparent'}`,
+                transition: 'background 0.12s',
+              }}
+              onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = C.bg2; }}
+              onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center' }}><PriorityDot score={emp.score} /></div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{emp.name}</div>
+                <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{emp.location} · {emp.fte} FTE · {emp.industry}</div>
+              </div>
+              <div><ScoreBar score={emp.score} accent={accent} employer={emp} /></div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {emp.signals.map(s => <SignalTag key={s} label={s} />)}
+              </div>
+              <div><BrokerPill broker={emp.broker} /></div>
+              <div><StatusBadge status={emp.status} accent={accent} /></div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const BROKERS = [
+  { name: 'Sarah R.', initials: 'SR', color: '#00C9A7', region: 'Midwest' },
+  { name: 'Mike T.',  initials: 'MT', color: '#4F9EF0', region: 'Southwest' },
+  { name: 'Jamie L.', initials: 'JL', color: '#A78BFA', region: 'Southeast' },
+  { name: 'Chris M.', initials: 'CM', color: '#F59E0B', region: 'Northeast' },
+  { name: 'Dana P.',  initials: 'DP', color: '#F87171', region: 'Northwest' },
+];
+
+function BrokerPicker({ accent, onAssign, onCancel }) {
+  const [hovered, setHovered] = useState(null);
+  return (
+    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 100, width: 240, background: C.bg2, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+      <div style={{ padding: '8px 12px', borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Select broker</div>
+      {BROKERS.map(b => (
+        <div key={b.name}
+          onClick={() => onAssign(b)}
+          onMouseEnter={() => setHovered(b.name)}
+          onMouseLeave={() => setHovered(null)}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', cursor: 'pointer', background: hovered === b.name ? C.bg3 : 'transparent', transition: 'background 0.1s' }}>
+          <div style={{ width: 26, height: 26, borderRadius: '50%', background: b.color + '22', border: `1px solid ${b.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: b.color, fontFamily: 'DM Mono', flexShrink: 0 }}>{b.initials}</div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 500, color: C.text }}>{b.name}</div>
+            <div style={{ fontSize: 10, color: C.text3 }}>{b.region}</div>
+          </div>
+          {hovered === b.name && <div style={{ marginLeft: 'auto', fontSize: 10, color: accent }}>Assign →</div>}
+        </div>
+      ))}
+      <div style={{ padding: '8px 12px', borderTop: `1px solid ${C.border}` }}>
+        <button onClick={onCancel} style={{ fontSize: 11, color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'DM Sans' }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Map View ──────────────────────────────────────────────────
+const STATE_GRID = [
+  {a:'ME',r:0,c:10},{a:'VT',r:1,c:9},{a:'NH',r:1,c:10},
+  {a:'WA',r:2,c:1},{a:'ID',r:2,c:2},{a:'MT',r:2,c:3},{a:'ND',r:2,c:4},{a:'MN',r:2,c:5},{a:'WI',r:2,c:6},{a:'MI',r:2,c:7},{a:'NY',r:2,c:8},{a:'MA',r:2,c:9},{a:'RI',r:2,c:10},
+  {a:'OR',r:3,c:1},{a:'NV',r:3,c:2},{a:'WY',r:3,c:3},{a:'SD',r:3,c:4},{a:'IA',r:3,c:5},{a:'IN',r:3,c:6},{a:'OH',r:3,c:7},{a:'PA',r:3,c:8},{a:'NJ',r:3,c:9},{a:'CT',r:3,c:10},
+  {a:'CA',r:4,c:1},{a:'UT',r:4,c:2},{a:'CO',r:4,c:3},{a:'NE',r:4,c:4},{a:'MO',r:4,c:5},{a:'KY',r:4,c:6},{a:'WV',r:4,c:7},{a:'VA',r:4,c:8},{a:'MD',r:4,c:9},{a:'DE',r:4,c:10},
+  {a:'AZ',r:5,c:2},{a:'NM',r:5,c:3},{a:'KS',r:5,c:4},{a:'AR',r:5,c:5},{a:'TN',r:5,c:6},{a:'NC',r:5,c:7},{a:'SC',r:5,c:8},{a:'DC',r:5,c:9},
+  {a:'HI',r:6,c:1},{a:'TX',r:6,c:3},{a:'OK',r:6,c:4},{a:'LA',r:6,c:5},{a:'MS',r:6,c:6},{a:'AL',r:6,c:7},{a:'GA',r:6,c:8},{a:'FL',r:6,c:9},
+  {a:'AK',r:7,c:0},
+];
+
+const STATE_NAMES = {AK:'Alaska',AL:'Alabama',AR:'Arkansas',AZ:'Arizona',CA:'California',CO:'Colorado',CT:'Connecticut',DC:'D.C.',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',IA:'Iowa',ID:'Idaho',IL:'Illinois',IN:'Indiana',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',MA:'Massachusetts',MD:'Maryland',ME:'Maine',MI:'Michigan',MN:'Minnesota',MO:'Missouri',MS:'Mississippi',MT:'Montana',NC:'North Carolina',ND:'North Dakota',NE:'Nebraska',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NV:'Nevada',NY:'New York',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VA:'Virginia',VT:'Vermont',WA:'Washington',WI:'Wisconsin',WV:'West Virginia',WY:'Wyoming'};
+
+function MapView({ employers, accent }) {
+  const [selectedState, setSelectedState] = useState(null);
+  const [hoveredState, setHoveredState] = useState(null);
+
+  const getStateAbbr = (loc) => loc.split(', ')[1];
+
+  const stateEmps = {};
+  employers.forEach(e => {
+    const s = getStateAbbr(e.location);
+    if (!stateEmps[s]) stateEmps[s] = [];
+    stateEmps[s].push(e);
+  });
+
+  const TILE = 58, GAP = 4;
+  const cols = 11, rows = 8;
+  const mapW = cols * (TILE + GAP);
+  const mapH = rows * (TILE + GAP);
+
+  const filtered = selectedState
+    ? employers.filter(e => getStateAbbr(e.location) === selectedState)
+    : employers;
+
+  const getColor = (abbr) => {
+    const emps = stateEmps[abbr];
+    if (!emps) return C.bg2;
+    const best = Math.max(...emps.map(e => e.score));
+    if (best >= 90) return accent + '30';
+    if (best >= 80) return C.blue + '25';
+    return C.amber + '20';
+  };
+
+  const getBorder = (abbr) => {
+    if (selectedState === abbr) return accent;
+    if (hoveredState === abbr) return C.border2;
+    if (stateEmps[abbr]) return C.border2;
+    return C.border;
+  };
+
+  return (
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', padding: '16px 18px', gap: 16 }}>
+      {/* Map */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: C.text2, fontWeight: 500 }}>National opportunity map</div>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
+            {[{label:'Score 90+', color: accent},{label:'Score 80+', color: C.blue},{label:'Score <80', color: C.amber}].map(l => (
+              <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: l.color + '60', border: `1px solid ${l.color}` }} />
+                <span style={{ fontSize: 10, color: C.text3 }}>{l.label}</span>
+              </div>
+            ))}
+            {selectedState && (
+              <button onClick={() => setSelectedState(null)} style={{ fontSize: 10, color: C.text3, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontFamily: 'DM Sans', marginLeft: 8 }}>
+                Clear filter ×
+              </button>
+            )}
+          </div>
+        </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          <svg width="100%" height="100%" viewBox={`0 0 ${mapW} ${mapH}`} preserveAspectRatio="xMidYMid meet" style={{ maxWidth: '100%', maxHeight: '100%' }}>
+            {STATE_GRID.map(({ a, r, c }) => {
+              const x = c * (TILE + GAP);
+              const y = r * (TILE + GAP);
+              const emps = stateEmps[a] || [];
+              const isSelected = selectedState === a;
+              const isHovered = hoveredState === a;
+              return (
+                <g key={a} style={{ cursor: emps.length ? 'pointer' : 'default' }}
+                  onClick={() => emps.length && setSelectedState(isSelected ? null : a)}
+                  onMouseEnter={() => setHoveredState(a)}
+                  onMouseLeave={() => setHoveredState(null)}
+                >
+                  <rect x={x} y={y} width={TILE} height={TILE} rx={4}
+                    fill={getColor(a)}
+                    stroke={getBorder(a)}
+                    strokeWidth={isSelected ? 1.5 : 1}
+                    style={{ transition: 'all 0.15s' }}
+                  />
+                  <text x={x + TILE/2} y={y + TILE/2 - (emps.length ? 4 : 0)} textAnchor="middle" dominantBaseline="middle"
+                    fontSize="9" fontWeight={emps.length ? 600 : 400}
+                    fill={emps.length ? (isSelected ? accent : C.text2) : C.text3}
+                    fontFamily="DM Mono, monospace"
+                  >{a}</text>
+                  {emps.length > 0 && (
+                    <text x={x + TILE/2} y={y + TILE/2 + 8} textAnchor="middle" dominantBaseline="middle"
+                      fontSize="10" fontWeight="700"
+                      fill={isSelected ? accent : emps[0].score >= 90 ? accent : C.blue}
+                      fontFamily="DM Mono, monospace"
+                    >{emps.length}</text>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      </div>
+
+      {/* Sidebar list */}
+      <div style={{ width: 320, background: C.bg1, border: `1px solid ${C.border}`, borderRadius: 8, display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: 0 }}>
+        <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 12, fontWeight: 500, color: C.text }}>
+            {selectedState ? (STATE_NAMES[selectedState] || selectedState) : 'All opportunities'}
+          </span>
+          <span style={{ fontSize: 10, fontFamily: 'DM Mono', color: C.text3 }}>{filtered.length} employers</span>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {filtered.length === 0 && (
+            <div style={{ padding: 24, textAlign: 'center', color: C.text3, fontSize: 12 }}>No opportunities in this state</div>
+          )}
+          {filtered.map(emp => (
+            <div key={emp.id} style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <PriorityDot score={emp.score} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 2 }}>{emp.name}</div>
+                <div style={{ fontSize: 11, color: C.text3, marginBottom: 6 }}>{emp.location} · {emp.fte} FTE</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {emp.signals.slice(0,2).map(s => <SignalTag key={s} label={s} />)}
+                  <span style={{ marginLeft: 'auto', fontFamily: 'DM Mono', fontSize: 12, fontWeight: 600, color: emp.score >= 90 ? accent : C.text2 }}>{emp.score}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '10px 14px', borderTop: `1px solid ${C.border}`, fontSize: 10, color: C.text3 }}>
+          Click a state to filter · Highlighted states have active leads
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────
+function App() {
+  const [nav, setNav] = useState('feed');
+  const [selectedId, setSelectedId] = useState(1);
+  const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
+  const [employerData, setEmployerData] = useState(employers);
+
+  const selectedEmployer = employerData.find(e => e.id === selectedId);
+
+  const handleAssign = (employerId, broker) => {
+    setEmployerData(prev => prev.map(e => e.id === employerId
+      ? { ...e, broker, status: 'routed' }
+      : e
+    ));
+  };
+
+  // Tweaks wiring
+  useEffect(() => {
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === '__activate_edit_mode') document.getElementById('tweaks-panel').classList.add('visible');
+      if (e.data?.type === '__deactivate_edit_mode') document.getElementById('tweaks-panel').classList.remove('visible');
+    });
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+    const accent = document.getElementById('tweak-accent');
+    const density = document.getElementById('tweak-density');
+    const panel = document.getElementById('tweak-panel');
+    accent.value = tweaks.accent;
+    density.value = tweaks.density;
+    panel.value = tweaks.panelPos;
+
+    const apply = () => {
+      const vals = { accent: accent.value, density: density.value, panelPos: panel.value };
+      setTweaks(vals);
+      window.parent.postMessage({ type: '__edit_mode_set_keys', edits: vals }, '*');
+    };
+    accent.addEventListener('change', apply);
+    density.addEventListener('change', apply);
+    panel.addEventListener('change', apply);
+  }, []);
+
+  return (
+    <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      <Sidebar active={nav} onNav={setNav} accent={tweaks.accent} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <TopBar accent={tweaks.accent} navLabel={navItems.find(n => n.id === nav)?.label} />
+        {nav === 'feed' && <StatCards accent={tweaks.accent} />}
+        {/* Table + detail panel */}
+        {nav === 'map' ? (
+          <MapView employers={employerData} accent={tweaks.accent} />
+        ) : nav === 'feed' ? (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: tweaks.panelPos === 'right' ? 'row' : 'column', paddingBottom: tweaks.panelPos === 'bottom' ? 0 : 18, gap: 0 }}>
+          <LeadTable accent={tweaks.accent} density={tweaks.density} selectedId={selectedId} onSelect={setSelectedId} employers={employerData} panelOpen={!!selectedEmployer} />
+          {selectedEmployer && tweaks.panelPos === 'right' && (
+            <div style={{ width: 500, borderLeft: `1px solid ${C.border}`, background: C.bg1, overflowY: 'auto', flexShrink: 0 }}>
+              <DetailPanel employer={selectedEmployer} accent={tweaks.accent} onClose={() => setSelectedId(null)} onAssign={(b) => handleAssign(selectedEmployer.id, b)} />
+            </div>
+          )}
+          {selectedEmployer && tweaks.panelPos === 'bottom' && (
+            <div style={{ flexShrink: 0, overflowY: 'auto', maxHeight: 'min(340px, 45vh)', marginTop: 10, marginBottom: 10 }}>
+              <DetailPanel employer={selectedEmployer} accent={tweaks.accent} onClose={() => setSelectedId(null)} onAssign={(b) => handleAssign(selectedEmployer.id, b)} />
+            </div>
+          )}
+        </div>
+        ) : (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, background: C.bg2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: C.text3 }}>
+            {navItems.find(n => n.id === nav)?.icon}
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 500, color: C.text }}>{navItems.find(n => n.id === nav)?.label}</div>
+          <div style={{ fontSize: 12, color: C.text3 }}>Coming soon</div>
+          <div style={{ marginTop: 4, fontSize: 11, color: C.text3, padding: '5px 12px', background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 20, fontFamily: 'DM Mono' }}>In development</div>
+        </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
