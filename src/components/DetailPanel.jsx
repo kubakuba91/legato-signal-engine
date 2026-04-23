@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { C } from '../constants/colors.js';
 import BrokerPicker from './ui/BrokerPicker.jsx';
+import PriceToWin from './PriceToWin.jsx';
 
 export default function DetailPanel({ employer, accent, onClose, onAssign }) {
   const [showPicker, setShowPicker] = useState(false);
@@ -133,26 +134,8 @@ export default function DetailPanel({ employer, accent, onClose, onAssign }) {
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {['Draft outreach', 'Find similar', 'Apollo contacts'].map((label, i) => (
-              <button
-                key={label}
-                style={{
-                  fontSize: 12, fontWeight: 500, padding: '7px 14px', borderRadius: 5, cursor: 'pointer',
-                  fontFamily: 'DM Sans',
-                  background: i === 0 ? accent : 'transparent',
-                  color: i === 0 ? '#0B1929' : C.text2,
-                  border: i === 0 ? 'none' : `1px solid ${C.border2}`,
-                  transition: 'opacity 0.15s',
-                }}
-                onMouseEnter={e => { e.target.style.opacity = '0.8'; }}
-                onMouseLeave={e => { e.target.style.opacity = '1'; }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* Price-to-Win simulation */}
+          <PriceToWin employer={employer} accent={accent} />
         </div>
       </div>
     </div>
